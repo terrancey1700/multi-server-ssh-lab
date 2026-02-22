@@ -1,267 +1,262 @@
-# multi-server-ssh-lab
-# Multi-Server Networking and SSH Setup in UTM
+# Multi-Server SSH Lab
+## Virtual Network & Secure Remote Access in UTM
 
-## Project overview
-
-This project builds a small “mini network” on your computer using UTM virtual machines (VMs). The goal is to make one main VM (the controller) talk to three other VMs (targets) over the same private network, and then log into them securely using SSH.
-
-### What you will end up with
-
-* A controller VM named `terrance-devops-machine`
-* Three target VMs named `vm1`, `vm2`, and `vm3`
-* All four VMs on the same virtual LAN so they can **ping** each other
-* SSH installed and running so the controller can **SSH** into each target
-* Optional hostname shortcuts so you can type `ssh vm1` instead of `ssh 10.0.2.16`
+End-to-end multi-VM networking and SSH deployment using UTM virtualization. This project simulates a small internal network where one controller node securely manages multiple Linux servers over a shared virtual LAN.
 
 ---
 
-## Step-by-step setup (why, how, what)
+# Executive Summary (STAR Method)
 
-### 1) Create or clone the VMs
+## Situation
 
-**Why this matters:**
-You need multiple separate machines to practice real networking. Each VM behaves like its own computer.
+I needed a controlled environment to practice real-world networking and remote server administration without relying on cloud infrastructure. The goal was to simulate multiple machines communicating over a private subnet and establish secure remote access between them.
 
-**How it’s done:**
-In UTM, duplicate (clone) an existing Linux VM.
+Initial state:
 
-**What to do to complete the step:**
+- Single standalone VM
+- Default NAT networking
+- No inter-VM communication
+- No remote management architecture
 
-1. Open UTM.
-2. Right-click your Linux VM → **Duplicate**.
-3. Rename the copies to `vm1`, `vm2`, and `vm3`.
-4. You should now see these VMs listed:
-
-   * `terrance-devops-machine`
-   * `vm1`
-   * `vm2`
-   * `vm3`
+This limited the ability to practice infrastructure-level troubleshooting and multi-host administration.
 
 ---
 
-### 2) Put all VMs on the same UTM network
+## Task
 
-**Why this matters:**
-UTM often uses NAT by default. NAT lets a VM reach the internet, but it can block VM-to-VM communication. To make the VMs talk to each other, they must share the same virtual LAN.
+Design and deploy a mini internal network that:
 
-**How it’s done:**
-Switch each VM’s network mode to **Emulated VLAN** so they all live on the same internal network.
-
-**What to do to complete the step:**
-
-1. Shut down every VM (inside the VM):
-
-   * `sudo poweroff`
-2. In UTM, for **each** VM:
-
-   * Select the VM → **Edit** → **Network**
-   * Set **Network Mode** to `Emulated VLAN`
-   * Confirm the network device is `virtio-net-pci`
-3. Save and start all VMs.
-
-**What success looks like:**
-Each VM gets an IP address in the same subnet (for example `10.0.2.x`).
+- Connects four Linux VMs on the same virtual subnet
+- Enables inter-machine communication (ICMP validation)
+- Implements secure SSH-based remote management
+- Survives reboot and configuration changes
+- Mimics real internal LAN architecture
 
 ---
 
-### 3) Check each VM’s IP address
+## Action
 
-**Why this matters:**
-You need the IP addresses to test networking and to connect with SSH.
+### Phase 1 — Network Architecture Design
 
-**How it’s done:**
-Use `ip a` to list your network interfaces and addresses.
+Created:
 
-**What to do to complete the step:**
+- Controller VM: `terrance-devops-machine`
+- Target VMs:
+  - `vm1`
+  - `vm2`
+  - `vm3`
 
-1. On each VM, run:
+Reconfigured all VMs from **NAT** to **Emulated VLAN** mode in UTM to ensure they shared the same Layer 2 broadcast domain.
 
-   * `ip a`
-2. Find a line that looks like this:
+## Validated IP assignments:
 
-   * `inet 10.0.2.16/24 ...`
-3. Write down each VM’s address.
+ip a
+- Explanation:
+  - `ip — network configuration utility`
+  - `a — show all interfaces and assigned addresses`
 
-**Example mapping:**
+All VMs were confirmed to be on the same subnet (example: 10.0.2.0/24).
 
-* Controller: `terrance-devops-machine` → `10.0.2.15`
-* Target 1: `vm1` → `10.0.2.16`
-* Target 2: `vm2` → `10.0.2.17`
-* Target 3: `vm3` → `10.0.2.18`
+--- 
 
----
+### Phase 2 — Network Validation
 
-### 4) Test basic connectivity with ping
+Tested connectivity from controller to each target:
 
-**Why this matters:**
-SSH won’t work if the machines can’t even see each other. Ping is a fast way to check if the network path is working.
+ping -c 2 10.0.2.16
 
-**How it’s done:**
-Ping from the controller to each target VM.
+- Explanation:
 
-**What to do to complete the step:**
+  - `ping — sends ICMP echo requests`
 
-1. From `terrance-devops-machine`, ping each VM:
+  - `-c 2 — send exactly 2 packets1`
 
-   * `ping -c 2 10.0.2.16`
-   * `ping -c 2 10.0.2.17`
-   * `ping -c 2 10.0.2.18`
+Successful replies confirmed:
 
-**What success looks like:**
-You see replies like:
-
-* `64 bytes from 10.0.2.16: icmp_seq=1 ttl=64 time=...`
-
-**If it fails:**
-
-* “Destination Host Unreachable” usually means wrong network settings, the VM is off, or a firewall rule is blocking traffic.
+- `Shared subnet routing`
+- `Proper network mode configuration`
+- `No host-level firewall blocking ICMP`
 
 ---
 
-### 5) Install and start SSH on the target VMs
+### Phase 3 — SSH Service Deployment
 
-**Why this matters:**
-Ping only proves the network works. SSH is what lets you log in to another machine securely and run commands remotely.
+Installed and enabled SSH server on all target nodes:
 
-**How it’s done:**
-Install `openssh-server`, then start and enable the service.
+- `sudo apt update`
+- `sudo apt install openssh-server -y`
+- `sudo systemctl enable --now ssh`
 
-**What to do to complete the step (run on vm1, vm2, vm3):**
+Explanation:
 
-1. Update packages:
+- `apt update — refresh package index`
 
-   * `sudo apt update`
-2. Install the SSH server:
+- `apt install openssh-server — install SSH daemon`
 
-   * `sudo apt install openssh-server -y`
-3. Enable and start SSH now and on reboot:
+- `systemctl enable --now ssh — start service immediately and enable on boot`
 
-   * `sudo systemctl enable --now ssh`
-4. Confirm it’s running:
+Verified service state:
 
-   * `sudo systemctl status ssh`
+- `sudo systemctl status ssh`
 
-**What success looks like:**
-The status shows `active (running)`.
+Expected output:
+
+- `active (running)`
+
+---
+  
+### Phase 4 — Firewall Validation
+
+If UFW was enabled:
+
+- `sudo ufw allow ssh`
+- `sudo ufw reload`
+
+Explanation:
+
+- `Allows inbound TCP port 22`
+- `Reloads firewall rules`
 
 ---
 
-### 6) Allow SSH through the firewall (if needed)
+### Phase 5 — Remote Command Execution
 
-**Why this matters:**
-Even if SSH is installed, a firewall can block port 22 (the default SSH port).
+From the controller:
 
-**How it’s done:**
-Use `ufw` to allow SSH connections.
+- `ssh terrancey1@10.0.2.16 uptime`
 
-**What to do to complete the step (run on vm1, vm2, vm3 if ufw is enabled):**
+Explanation:
 
-1. Allow SSH:
+- `ssh user@host command:`
 
-   * `sudo ufw allow ssh`
-2. Reload firewall rules:
-
-   * `sudo ufw reload`
+  - `Executes command remotely without entering interactive shell`
+  - `Validates network, authentication, and service availability`
+  - `Successful execution confirmed end-to-end functionality`
 
 ---
 
-### 7) SSH from the controller into each target
+### Phase 6 — Hostname Resolution Improvement
 
-**Why this matters:**
-This proves your lab works end-to-end: network is good, SSH is running, and logins work.
+Edited /etc/hosts on the controller:
 
-**How it’s done:**
-From the controller VM, SSH into each target using username + IP address.
+- `sudo nano /etc/hosts`
 
-**What to do to complete the step:**
-From `terrance-devops-machine`, run:
+Added:
 
-* `ssh terrancey1@10.0.2.16 uptime`
-* `ssh terrancey1@10.0.2.17 uptime`
-* `ssh terrancey1@10.0.2.18 uptime`
+- `10.0.2.16 vm1`
+- `10.0.2.17 vm2`
+- `10.0.2.18 vm3`
 
-**What success looks like:**
-You either get an uptime result, or it asks for a password (both mean SSH is reachable).
+Now accessible via:
 
-**Common failure messages:**
+- `ssh terrancey1@vm1:`
 
-* `No route to host` → network mode mismatch, wrong IP, VM off
-* `Connection refused` → SSH server not running
-* `Permission denied (publickey)` → key-based login expected but key not set up
+  - `This mimics small-office DNS resolution behavior.`
 
 ---
 
-### 8) Optional: Add hostnames for easier access
+## Architecture Overview
 
-**Why this matters:**
-IP addresses are hard to remember. Hostnames let you type `ssh vm1` instead of `ssh 10.0.2.16`.
+### All nodes:
 
-**How it’s done:**
-Add name-to-IP entries in `/etc/hosts`.
-
-**What to do to complete the step:**
-
-1. On the controller VM, edit the hosts file:
-
-   * `sudo nano /etc/hosts`
-2. Add lines like these:
-
-   * `10.0.2.15 terrance-devops-machine`
-   * `10.0.2.16 vm1`
-   * `10.0.2.17 vm2`
-   * `10.0.2.18 vm3`
-3. Save and exit.
-
-**What success looks like:**
-
-* `ping vm1`
-* `ssh terrancey1@vm1`
+- `Ubuntu Linux`
+- `Same private subnet`
+- `SSH enabled`
+- `ICMP reachable`
+- `No external exposure`
 
 ---
 
-## Pain points and what I struggled with
+## Problems Encountered & Resolutions
+### NAT vs VLAN Confusion
 
-Here are the parts that were hardest during this build, plus what I learned while fixing them.
+Issue:
+- VMs could access the internet but not communicate with each other.
 
-### 1) NAT vs “same network” confusion
+Root Cause:
+- NAT isolates internal traffic and prioritizes outbound access.
 
-* What went wrong: I expected VMs to talk to each other automatically, but NAT mode mostly focuses on outbound internet access.
-* What fixed it: Switching every VM to **Emulated VLAN** so they share one virtual LAN.
+Resolution:
+- Switched to Emulated VLAN so all VMs share the same broadcast domain.
 
-### 2) “No route to host” errors
+Lesson:
+- Understand the difference between outbound NAT and Layer 2 networking.
 
-* What went wrong: SSH failed even though I thought the IP was right.
-* What fixed it: Making sure all VMs were actually running, all were on the same UTM network mode, and the IP addresses were re-checked with `ip a`.
+### “No Route to Host”
 
-### 3) “Connection refused” when trying SSH
+Issue:
+ - `SSH failed despite correct IP.`
 
-* What went wrong: The network was fine, but the SSH service wasn’t installed or wasn’t running.
-* What fixed it: Installing `openssh-server` and enabling the SSH service with `systemctl enable --now ssh`.
+Root Causes:
+- `VM powered off`
+- `Network mode mismatch`
+- `Incorrect IP assumption`
 
-### 4) Firewall surprises
+Resolution:
+- `Validated using ip a and confirmed subnet alignment.`
 
-* What went wrong: SSH was running, but the connection still failed.
-* What fixed it: Allowing SSH through `ufw` using `sudo ufw allow ssh` (and reloading rules).
+Lesson:
+- `Troubleshoot layer-by-layer (network → service → authentication).`
 
-### 5) Remembering IPs slowed me down
+### “Connection Refused”
 
-* What went wrong: I kept re-checking IP addresses and mixing them up.
-* What fixed it: Adding entries to `/etc/hosts` so I could use simple names like `vm1`.
+Issue:
+ - `Ping worked but SSH failed.`
+
+Root Cause:
+- `SSH daemon not installed or not running.`
+
+Resolution:
+- `Installed openssh-server and enabled via systemd.`
+
+Lesson:
+- `Network success does not imply service availability.`
+
+### Firewall Blocking
+
+Issue:
+- `SSH installed but connection timed out.`
+
+Resolution:
+- `Allowed SSH through UFW.`
+
+Lesson:
+- `Always consider host-based firewalls in troubleshooting flow.`
+
+### Results
+
+- `After completion:`
+- `Four VMs operate on the same subnet`
+- `Controller can execute remote commands across all targets`
+- `SSH survives reboot`
+- `Firewall rules persist`
+- `Lab environment ready for automation expansion`
+
+### Skills Demonstrated
+
+- `Linux system administration`
+- `Virtual networking architecture`
+- `Subnet validation`
+- `SSH deployment and troubleshooting`
+- `Firewall configuration (UFW)`
+- `Service management (systemd)`
+- `Layered debugging methodology`
+- `Internal DNS simulation via /etc/hosts`
 
 ---
 
-## Results
+## Future Improvements
 
-After completing these steps:
-
-* All VMs share the same network and can ping each other.
-* The controller VM can SSH into `vm1`, `vm2`, and `vm3` reliably.
-* The lab is ready for automation projects like a multi-server health collector.
+- `SSH key-based authentication`
+- `Disable password authentication`
+- `Harden SSH configuration`
+- `Implement Fail2Ban`
+- `Centralized logging`
+- `Ansible-based multi-host automation`
+- `Multi-node configuration management lab`
 
 ---
 
-## Next steps
-
-* Set up passwordless SSH using `ssh-keygen` and `ssh-copy-id`.
-* Write a Bash script to collect metrics like `uptime`, disk usage (`df -h`), and memory/CPU snapshots.
-* Combine output into a simple HTML report or dashboard.
+## Author
+Terrance Young
+Aspiring DevOps / Systems Engineer
